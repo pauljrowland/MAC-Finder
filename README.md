@@ -43,7 +43,3 @@ A small PowerShell GUI tool that finds a machine's MAC address from a Windows DH
 ## How it works
 
 The script runs `Get-DhcpServerv4Scope` to list all scopes, then `Get-DhcpServerv4Lease -AllLeases` against each one, filtering on `HostName`. Servers with many scopes take longer, and the status line shows progress.
-
-## Changing the default server
-
-Edit the `$txtServer.Text` line near the top of the UI section in the script.
