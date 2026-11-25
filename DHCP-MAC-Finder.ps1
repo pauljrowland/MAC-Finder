@@ -55,18 +55,24 @@ $txtHost.Location = New-Object System.Drawing.Point(110, 49)
 $txtHost.Size     = New-Object System.Drawing.Size(880, 23)
 $form.Controls.Add($txtHost)
 
+New-Label 'IP address:' 15 86 | Out-Null
+$txtIP = New-Object System.Windows.Forms.TextBox
+$txtIP.Location = New-Object System.Drawing.Point(110, 83)
+$txtIP.Size     = New-Object System.Drawing.Size(880, 23)
+$form.Controls.Add($txtIP)
+
 $btnSearch = New-Object System.Windows.Forms.Button
 $btnSearch.Text     = 'Search'
-$btnSearch.Location = New-Object System.Drawing.Point(1000, 47)
+$btnSearch.Location = New-Object System.Drawing.Point(1000, 64)
 $btnSearch.Size     = New-Object System.Drawing.Size(90, 27)
 $form.Controls.Add($btnSearch)
 $form.AcceptButton = $btnSearch
 
-$lblStatus = New-Label 'Ready.' 15 85
+$lblStatus = New-Label 'Ready.' 15 118
 
 $grid = New-Object System.Windows.Forms.DataGridView
-$grid.Location = New-Object System.Drawing.Point(15, 110)
-$grid.Size     = New-Object System.Drawing.Size(1075, 220)
+$grid.Location = New-Object System.Drawing.Point(15, 143)
+$grid.Size     = New-Object System.Drawing.Size(1075, 187)
 $grid.ReadOnly = $true
 $grid.AllowUserToAddRows = $false
 $grid.RowHeadersVisible  = $false
@@ -87,13 +93,15 @@ $form.Controls.Add($btnCopy)
 $btnSearch.Add_Click({
     $server = $txtServer.Text.Trim()
     $name   = $txtHost.Text.Trim()
-    if (-not $server -or -not $name) {
-        [System.Windows.Forms.MessageBox]::Show('Enter both a DHCP server and a hostname.') | Out-Null
+    $ip     = $txtIP.Text.Trim()
+    if (-not $server -or (-not $name -and -not $ip)) {
+        [System.Windows.Forms.MessageBox]::Show('Enter a DHCP server and a hostname and/or an IP address.') | Out-Null
         return
     }
     # No wildcard given -> match the exact name, or the short name followed by a domain
     $pattern = $name
     $short   = ($name -split '\.')[0]
+    $criteria = (@(if ($name) { "'$name'" }; if ($ip) { "'$ip'" }) -join ' / ')
 
     $grid.Rows.Clear()
     $btnCopy.Enabled  = $false
@@ -111,8 +119,12 @@ $btnSearch.Add_Click({
 
             $leases = Get-DhcpServerv4Lease -ComputerName $server -ScopeId $scope.ScopeId `
                         -AllLeases -ErrorAction SilentlyContinue |
-                      Where-Object { $_.HostName -like $pattern -or
-                                     ($name -notmatch '\.' -and $_.HostName -like "$short.*") }
+                      Where-Object {
+                          # Each filled-in box must match; an empty box is ignored
+                          (-not $name -or $_.HostName -like $pattern -or
+                              ($name -notmatch '\.' -and $_.HostName -like "$short.*")) -and
+                          (-not $ip -or $_.IPAddress.ToString() -like $ip)
+                      }
             foreach ($l in $leases) {
                 $mac = ($l.ClientId -replace '-', ':').ToLower()
                 $grid.Rows.Add($mac, $l.HostName, $l.IPAddress, $scope.Name) | Out-Null
@@ -124,7 +136,7 @@ $btnSearch.Add_Click({
             $grid.Rows[0].Selected = $true
             $btnCopy.Enabled = $true
         } else {
-            $lblStatus.Text = "No lease found for '$name' in $($scopes.Count) scopes."
+            $lblStatus.Text = "No lease found for $criteria in $($scopes.Count) scopes."
         }
     }
     catch {
